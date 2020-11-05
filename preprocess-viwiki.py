@@ -1,47 +1,47 @@
 import os
-import re
 import argparse
 
-from preprocessor import *
+from preprocessor import Preprocessor, Language
 p = Preprocessor(Language.vietnamese)
 
+def read_large_file(file_handler, block_size=1000):
+    # 1000 × 4233 + 198 = 4,233,198
+    block = []
+    for line in file_handler:
+        if len(line) == 0:
+            continue
+        block.append(line)
+        if len(block) == block_size:
+            yield block
+            block = []
+    
+    #yield the last block
+    if block:
+        yield block
+
 def run(args):
-    # data path
-    input_path = os.path.join(args.inp, 'viwiki')
-    output_path = os.path.join(args.out, 'viwiki')
-    if not os.path.exists(output_path):
-        os.mkdir(output_path)
-    # file names list
-    file_names = os.listdir(input_path)
-
-    count = 0
-    for fname in file_names:
-        input_dir = os.path.join(input_path, fname)
-        input_file = open(input_dir, 'r+', encoding='utf-8')
-        output_dir = os.path.join(output_path, fname)
-        output_file = open(output_dir, 'w+', encoding='utf-8')
-
-        lines = input_file.read().splitlines()
-        for line in lines:
-            if len(line) == 0:
-                continue
-            m = re.fullmatch(r'^=.*=$', line)
-            if m:
-                line = line.split()[1:-1]
-                line = ' '.join(line)
+    with open(args.inp, 'r+', encoding='utf-8') as file_handler:
+        count = 0
+        f_out = open(args.out, 'w+', encoding='utf-8')
+        for block in read_large_file(file_handler):
             try:
-                line = p.preprocess(line)
+                block = p.preprocess_list(block)
             except:
-                print('File:', fname)
-                print(' Error:', line)
-            output_file.write(line + '\n')
-
-        input_file.close()
-        output_file.close()
-
-        count += 1
-        if (len(file_names) / count) % 10 == 0:
-            print('%d/%d'%(count, len(file_names)))
+                print("Error in block %d. Processing each sentence" % count)
+                block1 = []
+                for line in block:
+                    try:
+                        line = p.preprocess(line)
+                        block1.append(line)
+                    except:
+                        # If encountered error, eliminate the whole line
+                        print('Error: %s (%d characters)' % (line, len(line)))
+                block = block1
+            # f_out.write('\n'.join(p.preprocess_list(block)))
+            f_out.write('\n'.join(block))
+            print(count)
+            count += 1
+        f_out.close()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
